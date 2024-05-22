@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/AgentHagu/Trivali/issues"
   },
-  "homepage": "https://github.com/AgentHagu/Trivali#readme"
+  "homepage": "https://github.com/AgentHagu/Trivali#readme",
+  "dependencies": {
+    "express": "expressjs/express"
+  }
 }
