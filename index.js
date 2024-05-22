@@ -1,9 +1,20 @@
-var http = require('http');
-var fs = require("fs");
+const express = require("express");
+const path = require("path");
+const app = express();
+const port = 3000; // are we supposed to choose a specific port?
 
-http.createServer(function (req, res) {
-    res.writeHead(200, { 'Content-Type': 'text/HTML' });
-    console.log("HELLO");
-    fs.writeFile('hello.txt', "TEST WORKED WOWOWOWOW", err => { });
-    res.end('ONE TWO THREE FOUR!');
-}).listen(8080); 
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+app.get("/login", (req, res) => {
+    res.sendFile(path.join(__dirname, "public/login.html"));
+});
+
+app.get("/register", (req, res) => {
+    res.sendFile(path.join(__dirname, "public/register.html"));
+});
+
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
