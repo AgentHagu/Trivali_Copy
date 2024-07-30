@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: client/src/components/Expenses.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: client/src/components/Expenses.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import Container from "react-bootstrap/Container"
+import { Button, Stack } from "react-bootstrap"
+import React from 'react';
+import BudgetCard from "./BudgetCard/BudgetCard";
+import UncategorizedBudgetCard from "./BudgetCard/UncategorizedBudgetCard";
+import TotalBudgetCard from "./BudgetCard/TotalBudgetCard"
+import ViewExpensesModal from "../context/ViewExpensesModal"
+import AddBudgetModal from "../context/AddBudget"
+import AddExpenseModal from "../context/AddExpense"
+import { useState } from 'react'
+import { UNCATEGORIZED_BUDGET_ID, useBudgets } from "../context/BudgetsContext";
+
+/**
+ * Expenses component to manage budgets and expenses display.
+ * 
+ * @returns {JSX.Element} Expenses component with budget cards and modals.
+ */
+export default function Expenses() {
+    const [showAddBudgetModal, setShowAddBudgetModal] = useState(false)
+    const [showAddExpenseModal, setShowAddExpenseModal] = useState(false)
+    const [viewExpensesModalBudgetId, setViewExpensesModalBudgetId] = useState()
+    const [addExpenseModalBudgetId, setAddExpenseModalBudgetId] = useState()
+    const { budgets, getBudgetExpenses } = useBudgets()
+
+    /**
+     * Opens the add expense modal for a specific budget.
+     * 
+     * @param {string} budgetId - ID of the budget to add an expense to.
+     */
+    function openAddExpenseModal(budgetId) {
+        setShowAddExpenseModal(true)
+        setAddExpenseModalBudgetId(budgetId)
+    }
+
+    return (
+        &lt;>
+            &lt;Container className="mt-2">
+                &lt;Stack direction='horizontal' gap="2" className="mb-4">
+                    &lt;h1 className="me-auto">Budgets&lt;/h1>
+                    &lt;Button variant="primary" onClick={() => setShowAddBudgetModal(true)}>
+                        Add Budget
+                    &lt;/Button>
+
+                    &lt;Button variant="outline-primary" onClick={openAddExpenseModal}>
+                        Add Expense
+                    &lt;/Button>
+                &lt;/Stack>
+                &lt;div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                        gap: "1rem",
+                        alignItems: "flex-start",
+                    }}
+                >
+                    {budgets.map(budget => {
+                        const amount = getBudgetExpenses(budget.id).reduce((total, expense) => total + expense.amount, 0)
+                        if (budget.id === UNCATEGORIZED_BUDGET_ID) {
+                            return null
+                        }
+
+                        return (
+                            &lt;BudgetCard
+                                key={budget.id}
+                                name={budget.name}
+                                amount={amount}
+                                max={budget.max}
+                                onAddExpenseClick={() => openAddExpenseModal(budget.id)}
+                                onViewExpensesClick={() => setViewExpensesModalBudgetId(budget.id)}
+                            />
+                        )
+                    })}
+                    &lt;UncategorizedBudgetCard onAddExpenseClick={openAddExpenseModal}
+                        onViewExpensesClick={() => setViewExpensesModalBudgetId(UNCATEGORIZED_BUDGET_ID)} />
+                    &lt;TotalBudgetCard />
+                &lt;/div>
+            &lt;/Container>
+
+            &lt;AddBudgetModal
+                show={showAddBudgetModal}
+                handleClose={() => setShowAddBudgetModal(false)}
+            />
+
+            &lt;AddExpenseModal
+                show={showAddExpenseModal}
+                defaultBudgetId={addExpenseModalBudgetId}
+                handleClose={() => setShowAddExpenseModal(false)}
+            />
+
+            &lt;ViewExpensesModal
+                budgetId={viewExpensesModalBudgetId}
+                handleClose={() => setViewExpensesModalBudgetId()}
+            />
+        &lt;/>
+    )
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#App">App</a></li><li><a href="global.html#POST/openAi-generate-itinerary">POST /openAi-generate-itinerary</a></li><li><a href="global.html#POST/openAi-generate-itinerary-json">POST /openAi-generate-itinerary-json</a></li><li><a href="global.html#PrivateRoute">PrivateRoute</a></li><li><a href="global.html#Table">Table</a></li><li><a href="global.html#checkAuthenticated">checkAuthenticated</a></li><li><a href="global.html#checkNotAuthenticated">checkNotAuthenticated</a></li><li><a href="global.html#defaultValue">defaultValue</a></li><li><a href="global.html#findOrCreateDocument">findOrCreateDocument</a></li><li><a href="global.html#findOrCreateProject">findOrCreateProject</a></li><li><a href="global.html#getProgressBarVariant">getProgressBarVariant</a></li><li><a href="global.html#initialize">initialize</a></li><li><a href="global.html#userToSimpleUser">userToSimpleUser</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Mon Jul 29 2024 15:37:35 GMT+0800 (Singapore Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

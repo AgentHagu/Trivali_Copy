@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: client/src/pages/LoginPage.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: client/src/pages/LoginPage.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// React and React Router imports
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+// Components
+import HeaderNavbar from "../components/HeaderNavbar";
+
+const SERVER_URL = process.env.REACT_APP_API_URL;
+
+/**
+ * LoginPage component for user login functionality.
+ *
+ * @component
+ * @returns {JSX.Element} The rendered component.
+ */
+export default function LoginPage() {
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [error, setError] = useState('')
+    const [isEmailValid, setIsEmailValid] = useState(true)
+    const [isPasswordValid, setIsPasswordValid] = useState(true)
+
+    const navigate = useNavigate()
+
+    // Validate user session on component mount
+    useEffect(() => {
+        async function validateUser() {
+            const response = await fetch(`${SERVER_URL}/login`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+
+            if (response.ok) {
+                //console.log("Allowed to login")
+            } else {
+                navigate('/home')
+            }
+        }
+
+        validateUser()
+    }, [])
+
+    // Handle input change
+    const handleChange = (event) => {
+        const { name, value } = event.target;
+        if (name === 'email') {
+            setEmail(value)
+        } else if (name === 'password') {
+            setPassword(value)
+        }
+    };
+
+    // Handle form submission
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        setIsEmailValid(true)
+        setIsPasswordValid(true)
+
+        const response = await fetch(`${SERVER_URL}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ email, password })
+        })
+
+        if (response.ok) {
+            navigate('/home')
+        } else {
+            response.text().then(errorMessage => {
+                setError(errorMessage)
+
+                if (errorMessage === "Password incorrect") {
+                    setIsPasswordValid(false)
+                } else {
+                    setIsEmailValid(false)
+                    setIsPasswordValid(false)
+                }
+            });
+        }
+    };
+
+    return (
+        &lt;>
+            &lt;HeaderNavbar />
+            &lt;div className="text-center">
+                &lt;div style={{ width: "100%", maxWidth: "330px", padding: "15px", margin: "auto" }}>
+                    &lt;form onSubmit={handleSubmit} className="mb-4" noValidate>
+                        &lt;h1 className="h3 mb-3 fw-normal">Sign in here&lt;/h1>
+
+                        &lt;div className="form-floating mb-2">
+                            &lt;input id="floatingEmail" className={`form-control ${isEmailValid ? "" : "is-invalid"}`} type="email" name="email" value={email} placeholder="Email" required onChange={handleChange} />
+                            &lt;label htmlFor="floatingEmail">Email address&lt;/label>
+                        &lt;/div>
+
+                        &lt;div className="form-floating mb-2">
+                            &lt;input id="floatingPassword" className={`form-control ${isPasswordValid ? "" : "is-invalid"}`} type="password" name="password" value={password} placeholder="Password" required onChange={handleChange} />
+                            &lt;label htmlFor="floatingPassword">Password&lt;/label>
+                        &lt;/div>
+
+                        &lt;div className="mb-3 text-danger">
+                            {error}
+                        &lt;/div>
+
+                        &lt;button className="w-100 btn btn-lg btn-primary" type="submit">Sign in&lt;/button>
+                    &lt;/form>
+
+                    &lt;div className="text-center">
+                        &lt;p>Not a member? &lt;a href="/register" className="text-decoration-none">Register&lt;/a>&lt;/p>
+                    &lt;/div>
+                &lt;/div>
+            &lt;/div>
+        &lt;/>
+    );
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#App">App</a></li><li><a href="global.html#POST/openAi-generate-itinerary">POST /openAi-generate-itinerary</a></li><li><a href="global.html#POST/openAi-generate-itinerary-json">POST /openAi-generate-itinerary-json</a></li><li><a href="global.html#PrivateRoute">PrivateRoute</a></li><li><a href="global.html#Table">Table</a></li><li><a href="global.html#checkAuthenticated">checkAuthenticated</a></li><li><a href="global.html#checkNotAuthenticated">checkNotAuthenticated</a></li><li><a href="global.html#defaultValue">defaultValue</a></li><li><a href="global.html#findOrCreateDocument">findOrCreateDocument</a></li><li><a href="global.html#findOrCreateProject">findOrCreateProject</a></li><li><a href="global.html#getProgressBarVariant">getProgressBarVariant</a></li><li><a href="global.html#initialize">initialize</a></li><li><a href="global.html#userToSimpleUser">userToSimpleUser</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Mon Jul 29 2024 15:37:35 GMT+0800 (Singapore Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
