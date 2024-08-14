@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: client/src/components/Map.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: client/src/components/Map.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { DirectionsRenderer, GoogleMap, Marker } from '@react-google-maps/api';
+import { useLoadScriptContext } from '../context/LoadScriptProvider';
+import { useEffect, useRef, useState } from 'react';
+import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+
+const containerStyle = {
+    width: '100%',
+    height: '500px'
+};
+
+/**
+ * Map component that displays a Google Map with markers and routes based on the provided itinerary data.
+ *
+ * This component fetches itinerary data from a socket connection and displays markers and routes on a Google Map.
+ * It allows users to toggle the visibility of routes and select different travel modes (DRIVING, TRANSIT, WALKING).
+ *
+ * @param {Object} props - The component props.
+ * @param {string} props.projectId - The ID of the project to fetch the itinerary for.
+ * @param {Object} props.data - The initial data for the itinerary.
+ * @param {Object} props.socket - The socket connection used to fetch and receive itinerary data.
+ * @returns {React.ReactElement} The rendered `Map` component.
+ */
+export default function Map({ projectId, data, socket }) {
+    const { isLoaded } = useLoadScriptContext();
+    const [rows, setRows] = useState(data.itinerary.rows)
+    const [selected, setSelected] = useState(Array(rows.length).fill(null));
+    const [routes, setRoutes] = useState([])
+    const [showRoutes, setShowRoutes] = useState(false)
+    const [travelMode, setTravelMode] = useState("TRANSIT")
+    const mapRef = useRef(null);
+
+    const drivingPolylineOptions = {
+        strokeColor: '#ffa000',
+        strokeOpacity: 1,
+        strokeWeight: 10,
+    }
+
+    const transitPolylineOptions = {
+        strokeColor: '#55dd33',
+        strokeOpacity: 1,
+        strokeWeight: 10,
+
+    };
+
+    const walkingPolylineOptions = {
+        strokeColor: '#00FF00',
+        strokeOpacity: 0,
+        strokeWeight: 0,
+        icons: [
+            {
+                icon: {
+                    path: window.google.maps.SymbolPath.CIRCLE,
+                    fillColor: '#0f53ff',
+                    fillOpacity: 1,
+                    scale: 4,
+                    strokeWeight: 1,
+                    strokeColor: '#0f53ff'
+                },
+                offset: '100%',
+                repeat: '12px'
+            }
+        ]
+    }
+
+    // Tooltip for no routes found
+    const tooltip = (
+        &lt;Tooltip id="tooltip" className="text-info">
+            &lt;strong>No routes found!&lt;/strong> Possible disconnections in itinerary
+        &lt;/Tooltip>
+    );
+
+    // Dynamically load itinerary to display on Map tab
+    useEffect(() => {
+        if (socket == null) return;
+
+        const loadItinerary = itinerary => {
+            setRows(itinerary.rows);
+        };
+
+        socket.on('load-itinerary', loadItinerary);
+
+        socket.emit('get-itinerary', projectId);
+
+        return () => {
+            socket.off('load-itinerary', loadItinerary);
+        };
+    }, [socket, projectId]);
+
+    // Dynamically update locations on Map tab from itinerary changes
+    useEffect(() => {
+        const handler = (placeChange) => {
+            const newRows = [...rows];
+            newRows[placeChange.day].activities[placeChange.activity].location = placeChange.place;
+            setRows(newRows);
+        };
+
+        socket.on('receive-location-changes', handler);
+
+        return () => {
+            socket.off('receive-location-changes', handler);
+        };
+    }, [socket, rows]);
+
+    // Automatically set bounds and center for map given markers and routes
+    useEffect(() => {
+        if (!isLoaded || !mapRef.current) return;
+
+        const bounds = new window.google.maps.LatLngBounds();
+
+        // Include selected pins
+        selected.forEach(rowIndex => {
+            if (rowIndex === null) return;
+
+            rows[rowIndex].activities.forEach(activity => {
+                const location = activity.location.geometry?.location;
+                if (location) {
+                    bounds.extend(new window.google.maps.LatLng(location.lat, location.lng));
+                }
+            });
+        });
+
+        // Include start and end points of each route
+        routes.forEach(route => {
+            route.routes[0].legs.forEach(leg => {
+                bounds.extend(leg.start_location);
+                bounds.extend(leg.end_location);
+                // Optionally extend bounds for intermediate steps if needed
+                leg.steps.forEach(step => {
+                    bounds.extend(step.start_location);
+                    bounds.extend(step.end_location);
+                });
+            });
+        });
+
+        if (!bounds.isEmpty()) {
+            mapRef.current.fitBounds(bounds, { padding: 50 });
+
+            const listener = window.google.maps.event.addListenerOnce(mapRef.current, 'bounds_changed', () => {
+                const currentZoom = mapRef.current.getZoom();
+                if (currentZoom > 15) {
+                    mapRef.current.setZoom(15);
+                }
+                window.google.maps.event.removeListener(listener);
+            });
+        } else {
+            mapRef.current.setCenter({ lat: 0, lng: 0 });
+            mapRef.current.setZoom(1);
+        }
+    }, [isLoaded, rows, selected, routes]);
+
+
+    // Request for routes from Google Maps API
+    useEffect(() => {
+        const directionService = new window.google.maps.DirectionsService()
+
+        async function calculateRoutes() {
+            const newRoutes = [];
+
+            const routePromises = selected.map(async rowIndex => {
+                if (rowIndex === null) return;
+
+                const row = rows[rowIndex];
+                const rowRoutes = [];
+
+                const activityPromises = row.activities.map(async (activity, i) => {
+                    if (i >= row.activities.length - 1) return;
+
+                    const location1 = activity.location.geometry?.location;
+                    const location2 = row.activities[i + 1].location.geometry?.location;
+
+                    if (location1 &amp;&amp; location2) {
+                        const request = {
+                            origin: { lat: location1.lat, lng: location1.lng },
+                            destination: { lat: location2.lat, lng: location2.lng },
+                            travelMode: travelMode
+                        };
+
+                        try {
+                            const result = await new Promise((resolve, reject) => {
+                                directionService.route(request, (result, status) => {
+                                    if (status === window.google.maps.DirectionsStatus.OK) {
+                                        resolve(result);
+                                    } else {
+                                        reject(`Error fetching directions ${status}`);
+                                    }
+                                });
+                            });
+                            rowRoutes.push(result);
+                        } catch (error) {
+                            console.error("Error fetching directions: ", error);
+                        }
+                    }
+                });
+
+                await Promise.all(activityPromises);
+                newRoutes.push(...rowRoutes);
+            });
+
+            await Promise.all(routePromises);
+
+            setRoutes(newRoutes);
+        }
+
+        calculateRoutes();
+    }, [rows, selected, travelMode])
+
+    if (!isLoaded) {
+        return &lt;div>Loading Maps...&lt;/div>;
+    }
+
+    function viewHandler(event) {
+        const dayIndex = parseInt(event.target.closest("table").getAttribute("day"))
+
+        if (selected[dayIndex] !== null) {
+            const updatedSelected = [...selected]
+            updatedSelected[dayIndex] = null
+            setSelected(updatedSelected)
+        } else {
+            const updatedSelected = [...selected]
+            updatedSelected[dayIndex] = dayIndex
+            setSelected(updatedSelected)
+        }
+    }
+
+    function viewRoutesHandler() {
+        setShowRoutes(!showRoutes);
+    }
+
+    function travelModeHandler(event) {
+        const element = event.target
+        setTravelMode(element.getAttribute("id"))
+    }
+
+    // TODO: Add custom markers with custom symbols and stuff
+    const customMarker = {
+        // path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+        // fillColor: "#FF0000",
+        // fillOpacity: 1,
+        // scale: 7,
+        // strokeWeight: 2,
+        // strokeColor: "#FFFFFF",
+    };
+
+    return &lt;div className="container py-3 px-3">
+        &lt;div className="row mb-2 px-3">
+            &lt;div className="col-3 ps-0  d-flex align-items-center">
+                &lt;div className="form-check form-switch d-flex align-items-center ps-1">
+                    &lt;h5 className="mb-0" style={{ userSelect: "none" }}>
+                        View routes
+                    &lt;/h5>
+                    &lt;h5 className="mb-0 ps-2 pe-3">
+                        &lt;input className="form-check-input ms-2" type="checkbox" role="switch" onChange={viewRoutesHandler} />
+                    &lt;/h5>
+                    {showRoutes &amp;&amp; routes.length === 0
+                        ? &lt;OverlayTrigger placement="top" overlay={tooltip}>
+                            &lt;h5 className="mb-0" style={{ backgroundColor: "white" }}>
+                                &lt;i
+                                    className="bi bi-info-circle-fill text-warning p-1"
+                                />
+                            &lt;/h5>
+                        &lt;/OverlayTrigger>
+                        : null
+                    }
+
+                &lt;/div>
+            &lt;/div>
+
+            {/* TODO: its off center/aligned */}
+            &lt;div className="col">
+                &lt;div className=" d-flex align-items-center">
+                    &lt;h5 className="mb-0 pe-3" style={{ userSelect: "none" }}>
+                        Travel modes:
+                    &lt;/h5>
+
+                    &lt;input type="radio" className="btn-check" name="travelMode" id="DRIVING" autoComplete="off" onClick={travelModeHandler} />
+                    &lt;label className="btn btn-outline-primary me-2" htmlFor="DRIVING" title="Driving">&lt;i className="bi bi-car-front-fill" />&lt;/label>
+
+                    &lt;input type="radio" className="btn-check" name="travelMode" id="TRANSIT" autoComplete="off" onClick={travelModeHandler} defaultChecked />
+                    &lt;label className="btn btn-outline-primary me-2" htmlFor="TRANSIT" title="Transit">&lt;i className="bi bi-train-front-fill" />&lt;/label>
+
+                    &lt;input type="radio" className="btn-check" name="travelMode" id="WALKING" autoComplete="off" onClick={travelModeHandler} />
+                    &lt;label className="btn btn-outline-primary me-2" htmlFor="WALKING" title="Walking">&lt;i className="bi bi-person-walking" />&lt;/label>
+
+                    {
+                        travelMode === "TRANSIT" &amp;&amp;
+                        &lt;h6 className="mb-0 ps-3 text-secondary" style={{ userSelect: "none" }}>
+                            Note: Transit data is inconsistent
+                        &lt;/h6>
+                    }
+                &lt;/div>
+            &lt;/div>
+        &lt;/div>
+
+        &lt;div className="row px-3">
+            &lt;div className="col-9 p-0 border border-2 border-black h-100">
+                &lt;GoogleMap
+                    mapContainerStyle={containerStyle}
+                    onLoad={map => (mapRef.current = map)}
+                >
+                    {
+                        showRoutes
+                            ? routes.map((route, index) => {
+                                return &lt;DirectionsRenderer
+                                    key={index}
+                                    directions={route}
+                                    options={{
+                                        preserveViewport: true,
+                                        polylineOptions: travelMode === 'DRIVING' ? drivingPolylineOptions :
+                                            travelMode === 'WALKING' ? walkingPolylineOptions :
+                                                transitPolylineOptions
+                                    }}
+                                />
+                            })
+                            : null
+                    }
+
+
+                    {
+                        selected.map(rowIndex => {
+                            if (rowIndex === null) {
+                                return null
+                            }
+
+                            return rows[rowIndex].activities.map((activity, index) => {
+                                const location = activity.location.geometry?.location
+                                if (location) {
+                                    return (
+                                        &lt;Marker
+                                            // icon={customMarker}
+                                            key={`marker-${rowIndex}-${index}`}
+                                            position={{ lat: location.lat, lng: location.lng }}
+                                        />
+                                    )
+                                }
+
+                                return null
+                            })
+                        })
+                    }
+
+                &lt;/GoogleMap>
+            &lt;/div>
+
+            &lt;div className="col pe-0 overflow-auto" style={{ height: '500px' }}>
+                {rows.map((row, dayIndex) => (
+                    &lt;table
+                        className={`table table-bordered table-fit
+                            ${selected.includes(dayIndex)
+                                ? 'border-success'
+                                : 'border-secondary'}`}
+                        style={{ cursor: "pointer", userSelect: "none" }}
+                        key={row.id}
+                        day={dayIndex}
+                        onClick={viewHandler}
+                    >
+                        &lt;thead
+                            className={`border-2 ${selected.includes(dayIndex)
+                                ? 'table-success border-success'
+                                : 'table-secondary border-secondary'}`}
+                        >
+                            &lt;tr>
+                                &lt;th
+                                    scope="col"
+                                    colSpan={2}
+                                    className="col-1 text-center"
+                                >
+                                    Click to toggle Day {dayIndex + 1} markers
+                                &lt;/th>
+                            &lt;/tr>
+                        &lt;/thead>
+
+                        &lt;tbody className='border-2'>
+                            {row.activities.map((activity, index) => (
+                                &lt;tr
+                                    className={`${(activity.location.name)
+                                        ? activity.location.geometry
+                                            ? ""
+                                            : "table-warning"
+                                        : "table-danger"} border border-dark`}
+                                    key={activity.id}
+                                    day={dayIndex}
+                                >
+                                    &lt;td className="fit text-center align-middle">
+                                        {/* TODO: Time start? Or range? */}
+                                        {activity.time.start}
+                                    &lt;/td>
+
+                                    &lt;td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {(activity.location.name) ? activity.location.name : "No location specified"}
+                                    &lt;/td>
+                                &lt;/tr>
+                            ))}
+                        &lt;/tbody>
+                    &lt;/table>
+                ))}
+            &lt;/div>
+        &lt;/div>
+    &lt;/div>
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#App">App</a></li><li><a href="global.html#POST/openAi-generate-itinerary">POST /openAi-generate-itinerary</a></li><li><a href="global.html#POST/openAi-generate-itinerary-json">POST /openAi-generate-itinerary-json</a></li><li><a href="global.html#PrivateRoute">PrivateRoute</a></li><li><a href="global.html#Table">Table</a></li><li><a href="global.html#defaultValue">defaultValue</a></li><li><a href="global.html#findOrCreateDocument">findOrCreateDocument</a></li><li><a href="global.html#findOrCreateProject">findOrCreateProject</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#getProgressBarVariant">getProgressBarVariant</a></li><li><a href="global.html#projectToSimpleProject">projectToSimpleProject</a></li><li><a href="global.html#refreshLastUpdate">refreshLastUpdate</a></li><li><a href="global.html#userToSimpleUser">userToSimpleUser</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Wed Aug 14 2024 12:34:31 GMT+0800 (Singapore Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
